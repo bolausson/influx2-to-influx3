@@ -1039,9 +1039,13 @@ for bucket in buckets_to_migrate:
                 future_pauses = 0
             eta_sec = (avg_write_per_chunk * remaining_chunks) + future_pauses
             rate = stats['records_written'] / write_time if write_time > 0 else 0
+            wal_info = ''
+            if WAL_WINDOW > 0:
+                wal_remaining = max(0, WAL_WINDOW - (time.time() - wal_window_start))
+                wal_info = f' | write {int(wal_remaining)}s'
             line = (f'    Chunk {i+1}/{len(chunks)} | {rate:,.0f} rec/s '
                     f'| elapsed: {format_duration(meas_elapsed)} '
-                    f'| ETA: {format_duration(eta_sec)}')
+                    f'| ETA: {format_duration(eta_sec)}{wal_info}')
             print(f'\r{line:<79}', end='', flush=True)
 
             # Save progress after each chunk
