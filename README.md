@@ -122,6 +122,7 @@ When migrating to a resource-constrained InfluxDB 3 target (e.g., Raspberry Pi),
 ```
 
 The pause gives InfluxDB 3 time to snapshot the WAL and persist data to Parquet files before the next write cycle.
+Make sure the `--wal-pause` is long enough e.g. until everything was persited.
 
 **Tuning**: Set `--wal-window` slightly above your InfluxDB 3 `--wal-snapshot-size` value (default: 600 WAL flushes at ~1/sec = ~600 seconds). For example, with `INFLUXDB3_WAL_SNAPSHOT_SIZE=100`, use `--wal-window 110`.
 
