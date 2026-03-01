@@ -231,10 +231,15 @@ def format_duration(seconds):
     elif seconds < 3600:
         m, s = divmod(int(seconds), 60)
         return f'{m}m {s:02d}s'
-    else:
+    elif seconds < 86400:
         h, rem = divmod(int(seconds), 3600)
         m = rem // 60
         return f'{h}h {m:02d}m'
+    else:
+        d, rem = divmod(int(seconds), 86400)
+        h = rem // 3600
+        m = (rem % 3600) // 60
+        return f'{d}d {h}h {m:02d}m'
 
 
 def generate_time_chunks(start_dt, end_dt, chunk_days):
@@ -846,12 +851,15 @@ grand_total_read = 0
 grand_total_written = 0
 grand_total_batches = 0
 bucket_count = 0
+timing_report = []  # [(bucket, elapsed, [(measurement, elapsed), ...])]
 
 for bucket in buckets_to_migrate:
     if interrupted:
         break
 
     database = bucket_to_database(bucket)
+    bucket_start_time = time.time()
+    meas_timings = []  # [(measurement, elapsed)]
     print(f'=== Bucket: {bucket} → Database: {database} ===')
 
     # Discover measurements
@@ -990,8 +998,8 @@ for bucket in buckets_to_migrate:
                 # Auto-detect pivot collision and retry with rename
                 err_str = str(e)
                 if 'pivot' in err_str and 'already exists' in err_str:
-                    m = re.search(r'value "([^"]+)" appears in a column key column, '
-                                  r'but a column named "([^"]+)" already exists', err_str)
+                    m = re.search(r'value\s+[\\"]+([\w]+)[\\"]+ appears in a column key column',
+                                  err_str)
                     if m:
                         col_name = m.group(1)
                         if col_name not in conflicting_keys:
@@ -1084,13 +1092,13 @@ for bucket in buckets_to_migrate:
             print()
 
         # Mark measurement as done if all chunks completed without interruption
+        meas_elapsed = time.time() - meas_start_time
         if not interrupted:
             grand_total_read += stats['records_read']
             grand_total_written += stats['records_written']
             grand_total_batches += stats['batches_written']
             progress['buckets'][bucket]['measurements'][measurement] = 'done'
             save_progress(progress)
-            meas_elapsed = time.time() - meas_start_time
             rate = stats['records_written'] / meas_elapsed if meas_elapsed > 0 else 0
             print(f'    Done: {stats["records_read"]:,} read, '
                   f'{stats["records_written"]:,} written '
@@ -1100,8 +1108,12 @@ for bucket in buckets_to_migrate:
             grand_total_read += stats['records_read']
             grand_total_written += stats['records_written']
             grand_total_batches += stats['batches_written']
+        meas_timings.append((measurement, meas_elapsed))
 
+    bucket_elapsed = time.time() - bucket_start_time
+    timing_report.append((bucket, bucket_elapsed, meas_timings))
     bucket_count += 1
+    print(f'  Bucket done: {format_duration(bucket_elapsed)}')
     print()
 
 # ---------------------------------------------------------------------------
@@ -1135,6 +1147,21 @@ else:
     save_completion(completion_end)
     print(f'  Watermark saved. Use --incremental to migrate new data later.')
 
+if timing_report:
+    print('Measurement timing:')
+    for bucket, bucket_elapsed, meas_timings in timing_report:
+        print(f'  {bucket}: {format_duration(bucket_elapsed)}')
+        for meas_name, meas_elapsed in meas_timings:
+            print(f'    {meas_name}: {format_duration(meas_elapsed)}')
+    print()
+
+    if len(timing_report) > 1:
+        print('Bucket timing:')
+        for bucket, bucket_elapsed, _ in timing_report:
+            print(f'  {bucket}: {format_duration(bucket_elapsed)}')
+        print()
+
+print('Overall:')
 print(f'  Buckets processed:            {bucket_count}')
 print(f'  Total records read:           {grand_total_read:,}')
 print(f'  Total records written:        {grand_total_written:,}')
