@@ -720,9 +720,6 @@ def process_stream(record_stream, tag_keys, ifdb3_client, stats,
                 if WRITE_DELAY > 0:
                     time.sleep(WRITE_DELAY)
 
-                if stats['records_written'] % (BATCH_SIZE * 10) == 0:
-                    print(f'      Progress: {stats["records_written"]:,} records written...')
-
     # Write remaining records
     if batch and not args.dryrun:
         ifdb3_client.write(record=batch)
@@ -1054,7 +1051,7 @@ for bucket in buckets_to_migrate:
             line = (f'    Chunk {i+1}/{len(chunks)} | {rate:,.0f} rec/s '
                     f'| elapsed: {format_duration(meas_elapsed)} '
                     f'| ETA: {format_duration(eta_sec)}{wal_info}')
-            print(f'\r{line:<79}', end='', flush=True)
+            print(f'\r{line}\033[K', end='', flush=True)
 
             # Save progress after each chunk
             progress['buckets'][bucket]['measurements'][measurement] = {
@@ -1081,7 +1078,7 @@ for bucket in buckets_to_migrate:
                                 f'| elapsed: {format_duration(wall_elapsed)} '
                                 f'| ETA: {format_duration(eta_sec)} '
                                 f'| WAL pause {pause_remaining}s')
-                        print(f'\r{line:<79}', end='', flush=True)
+                        print(f'\r{line}\033[K', end='', flush=True)
                         time.sleep(1)
                         pause_remaining -= 1
                     total_pause_time += time.time() - pause_start
